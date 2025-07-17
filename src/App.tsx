@@ -13,6 +13,8 @@ const App = () => {
     const [repaymentMethod, setRepaymentMethod] = useState('annuity'); // 'annuity' or 'flat'
     const [loanTermYears, setLoanTermYears] = useState(10); // Years
     const [bankSavingsInterestRate, setBankSavingsInterestRate] = useState(5); // New: Lãi suất tiết kiệm ngân hàng hằng năm (%)
+    const [monthlyRentalIncome, setMonthlyRentalIncome] = useState(0); // New: Thu nhập cho thuê BĐS hàng tháng (VND)
+
 
     // Function to handle form submission
     const handleFormSubmit = (e) => {
@@ -27,6 +29,7 @@ const App = () => {
             repaymentMethod,
             loanTermYears,
             bankSavingsInterestRate: bankSavingsInterestRate / 100, // New: Convert to decimal
+            monthlyRentalIncome // New: Pass monthly rental income
         };
         setInputs(data);
         const calculatedResults = calculateComparison(data);
@@ -155,6 +158,23 @@ const App = () => {
                                 />
                             </div>
 
+                            {/* Thu nhập cho thuê BĐS hàng tháng */}
+                            <div>
+                                <label htmlFor="monthlyRentalIncome" className="block text-gray-700 text-sm font-semibold mb-2">
+                                    Thu nhập cho thuê BĐS hàng tháng (VND):
+                                </label> 
+                                <input 
+                                    type="number"
+                                    id="monthlyRentalIncome"
+                                    value={monthlyRentalIncome}
+                                    onChange={(e) => setMonthlyRentalIncome(parseFloat(e.target.value))}
+                                    className="shadow-sm appearance-none border border-gray-300 rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition duration-200"
+                                    min="0"
+                                    step="1000"
+                                />
+                            </div>
+
+
                             {/* Phương thức vay */}
                             <div>
                                 <label htmlFor="loanType" className="block text-gray-700 text-sm font-semibold mb-2">
@@ -243,6 +263,9 @@ const App = () => {
                                             <strong className="text-purple-800">Số tiền vay:</strong> {formatCurrency(inputs.loanAmount)}
                                         </p>
                                         <p className="mb-2 text-gray-800">
+                                            <strong className="text-purple-800">Thu nhập cho thuê BĐS hàng tháng:</strong> {formatCurrency(inputs.monthlyRentalIncome)}
+                                        </p>
+                                        <p className="mb-2 text-gray-800">
                                             <strong className="text-purple-800">Tổng tài sản ban đầu (Vay + Tự có):</strong>{' '}
                                             {formatCurrency(inputs.currentSavings + inputs.loanAmount)}
                                         </p>
@@ -261,12 +284,16 @@ const App = () => {
                                             </p>
                                         )}
                                         <p className="mb-2 text-gray-800">
+                                            <strong className="text-purple-800">Tổng thu nhập từ cho thuê (sau lạm phát):</strong>{' '}
+                                            <span className="font-bold text-green-700">{formatCurrency(results.totalRentalIncomeAdjusted)}</span>
+                                        </p>
+                                        <p className="mb-2 text-gray-800">
                                             <strong className="text-purple-800">Giá trị tài sản sau {inputs.loanTermYears} năm:</strong>{' '}
                                             <span className="font-bold text-purple-700">{formatCurrency(results.finalValueWithLoan)}</span>
                                             <span className="text-sm text-gray-500 block italic">(Đã điều chỉnh lạm phát)</span>
                                         </p>
                                         <p className="mb-2 text-gray-800">
-                                            <strong className="text-purple-800">Giá trị ròng sau khi trả hết nợ:</strong>{' '}
+                                            <strong className="text-purple-800">Giá trị ròng sau khi trả hết nợ (đã tính thu nhập cho thuê):</strong>{' '}
                                             <span className="font-bold text-blue-700">{formatCurrency(results.netValueAfterLoan)}</span>
                                         </p>
                                     </div>
@@ -287,7 +314,7 @@ const App = () => {
                                         </p>
                                     )}
                                     <p className="text-gray-600 mt-4 italic text-sm">
-                                        (Giá trị này thể hiện sự chênh lệch tài sản cuối cùng khi có vay so với khi không vay, đã tính đến lãi suất và lạm phát.)
+                                        (Giá trị này thể hiện sự chênh lệch tài sản cuối cùng khi có vay so với khi không vay, đã tính đến lãi suất, lạm phát và thu nhập cho thuê.)
                                     </p>
                                 </div>
                             </>
@@ -317,7 +344,8 @@ const App = () => {
  * @param {number} data.annualInterestRate - Annual interest rate for the loan (decimal, e.g., 0.07 for 7%).
  * @param {string} data.repaymentMethod - Loan repayment method ('annuity' or 'flat').
  * @param {number} data.loanTermYears - Loan term in years.
- * @param {number} data.bankSavingsInterestRate - New: Annual bank savings interest rate (decimal, e.g., 0.05 for 5%).
+ * @param {number} data.bankSavingsInterestRate - Annual bank savings interest rate (decimal, e.g., 0.05 for 5%).
+ * @param {number} data.monthlyRentalIncome - New: Monthly property rental income.
  * @returns {object} Calculated comparison results.
  */
 const calculateComparison = (data) => {
@@ -329,7 +357,8 @@ const calculateComparison = (data) => {
         annualInterestRate,
         repaymentMethod,
         loanTermYears,
-        bankSavingsInterestRate, // New: Get bank savings interest rate
+        bankSavingsInterestRate,
+        monthlyRentalIncome // New: Get monthly rental income
     } = data;
 
     const loanTermMonths = loanTermYears * 12;
@@ -394,9 +423,115 @@ const calculateComparison = (data) => {
     // assuming it grows at the real property growth rate.
     const finalValueWithLoan = initialInvestmentWithLoan * Math.pow(1 + realPropertyGrowthRate, loanTermYears);
 
+    // Calculate total rental income, adjusted for inflation
+    let totalRentalIncomeAdjusted = 0;
+    if (monthlyRentalIncome > 0) {
+        // Assume rental income is received monthly and its real value remains constant (i.e., it increases with inflation)
+        // or we can adjust it for inflation and then sum it up.
+        // For simplicity, let's assume the monthly rental income is indexed to inflation.
+        // The present value of an annuity (series of future payments)
+        // or a simpler approach: sum up the future values of each monthly payment,
+        // discounted by inflation, and then compounded by bank savings rate if saved.
+        // A more straightforward approach for a high-level comparison: sum up the nominal monthly rentals
+        // and then discount the total sum by the inflation over the period.
+
+        // Simpler approach: Calculate total nominal rental income
+        const totalNominalRentalIncome = monthlyRentalIncome * loanTermMonths;
+
+        // Adjust total nominal rental income for inflation over the average period (loanTermYears / 2)
+        // This is a rough approximation, more precise would be year-by-year discounting
+        // Or, assume rental income keeps pace with inflation, so its real value is constant.
+        // Let's assume the income is received and then immediately affected by inflation.
+        // To get the real value of the total rental income over the loan term:
+        // We can treat each month's rental income as growing with inflation and then sum them up.
+        // Or, consider the real value of the monthly rental income: monthlyRentalIncome / (1 + inflationRate)^(year_of_income)
+        // Let's use a simpler approach for now: total nominal rental income adjusted by inflation.
+        // A more accurate way would be to treat each monthly rental income as a future cash flow that loses purchasing power.
+        // However, for this high-level comparison, let's assume it grows with inflation (meaning its real value stays the same)
+        // and contributes to the net value.
+
+        // A common simplification is to treat rental income as a real income stream.
+        // Total real rental income over the period.
+        // Let's use the average real value for the period.
+        // Alternatively, the income is used or saved, and its *net* effect is considered.
+
+        // Let's model it as the sum of all monthly rental incomes, each adjusted for inflation at the point it's received.
+        // Then, consider what that sum is worth at the end of the loan term.
+        // A simpler way for total real value of rental income:
+        // Assume rental income grows with inflation, so its purchasing power is constant.
+        // Total rental income over the period, in today's money (real terms).
+        totalRentalIncomeAdjusted = 0;
+        // The income is received monthly. Let's assume it's saved at the bank savings rate.
+        // So, it's the future value of an annuity of monthly rental incomes.
+        const monthlyRentalIncomeReal = monthlyRentalIncome / (1 + inflationRate / 12); // Real value of one month's rent
+        let futureValueRentalIncome = 0;
+
+        // For simplicity and alignment with other calculations, let's assume rental income is received
+        // and its *real value* is maintained (i.e., it grows with inflation).
+        // Then, the total real rental income is simply the sum of all monthly payments.
+        // If we want to consider the opportunity cost/gain of saving these rentals, we'd need a more complex model.
+        // For now, let's calculate the total nominal rental income and then apply an average inflation adjustment.
+        // Or, conceptually, the rental income is a positive cash flow that directly adds to your net worth.
+
+        // Let's calculate the future value of monthly rental income as if it were saved at the bank savings rate,
+        // and then adjust for inflation at the end.
+        // This is effectively how much wealth the rental income contributes.
+        let cumulativeRentalValue = 0;
+        for (let m = 1; m <= loanTermMonths; m++) {
+            // Future value of each monthly rental income, compounded at bank savings rate
+            // and then adjusted for inflation at the end of the loan term.
+            // This is complex. Let's simplify: monthly rental income as a direct offset to cost or a direct gain.
+            // Its 'real' value over time: `monthlyRentalIncome / (1 + inflationRate)^(m/12)`
+            // Sum of real values:
+            const realValueCurrentMonthRental = monthlyRentalIncome / Math.pow(1 + inflationRate / 12, m);
+            cumulativeRentalValue += realValueCurrentMonthRental;
+        }
+        // This cumulativeRentalValue is a 'present value' or 'real' sum of the rental income.
+        // To make it comparable to 'finalValueWithLoan' (which is in future inflated terms),
+        // we need to project this cumulative real value to the future.
+        // If rental income increases with inflation, its real value per month is constant.
+        // So, total real rental income is `monthlyRentalIncome * loanTermMonths`.
+        // Then project this real sum to the future by multiplying by inflation:
+        // totalRentalIncomeAdjusted = (monthlyRentalIncome * loanTermMonths) * Math.pow(1 + inflationRate, loanTermYears);
+
+        // A more reasonable approach for a simple model: The rental income helps offset expenses or adds to assets.
+        // If we assume the rental income is used to pay down the loan or saved, its contribution to the final net worth
+        // needs to be considered.
+        // Let's assume the **real value** of the monthly rental income is added to the net worth over time.
+        // The simpler way for comparison would be to consider the *total nominal rental income*
+        // and subtract it from the `totalRepaid` or add it to `netValueAfterLoan`.
+
+        // Let's sum the *real* value of monthly rental income over the loan term
+        // and then see how it impacts the final net value.
+        // We need to calculate the future value of an annuity of monthly rental incomes,
+        // considering inflation and bank savings rate. This becomes complicated quickly.
+
+        // Let's assume the rental income itself grows with inflation, so its *real* value is constant month-to-month.
+        // Then the total real rental income over the loan term is `monthlyRentalIncome * loanTermMonths`.
+        // To get its future nominal value (comparable to `finalValueWithLoan`), we multiply by inflation.
+        totalRentalIncomeAdjusted = monthlyRentalIncome * loanTermMonths; // This is nominal
+        // To get its value in today's purchasing power, we would divide.
+        // For comparison purposes, let's keep everything in future nominal values where possible.
+        // The rental income offsets the costs. So, it effectively increases the value of the 'with loan' scenario.
+
+        // Let's consider the total nominal rental income over the loan term
+        // and add it to the final asset value before comparing.
+        // This is a direct cash inflow.
+        totalRentalIncomeAdjusted = 0;
+        for (let i = 0; i < loanTermYears; i++) {
+            // Annual rental income, adjusted for inflation year by year
+            const annualRentalNominal = monthlyRentalIncome * 12;
+            const rentalIncomeThisYear = annualRentalNominal * Math.pow(1 + inflationRate, i);
+            totalRentalIncomeAdjusted += rentalIncomeThisYear;
+        }
+    }
+
+
     // Calculate the net value after repaying the loan:
-    // Final property value minus the total amount repaid (principal + interest).
-    const netValueAfterLoan = finalValueWithLoan - totalRepaid;
+    // Final property value + Total real rental income - Total amount repaid (principal + interest).
+    // The `totalRentalIncomeAdjusted` is essentially the accumulated *nominal* value of the rental income.
+    const netValueAfterLoan = finalValueWithLoan + totalRentalIncomeAdjusted - totalRepaid;
+
 
     // Calculate the gain/loss from borrowing compared to not borrowing.
     // A positive value means borrowing was more beneficial.
@@ -408,6 +543,7 @@ const calculateComparison = (data) => {
         totalInterestPaid,
         finalValueWithLoan,
         netValueAfterLoan,
+        totalRentalIncomeAdjusted, // New: Return total adjusted rental income
         gainFromBorrowing,
         monthlyPayment: repaymentMethod === 'annuity' ? monthlyPayment : null, // Monthly payment only relevant for annuity
         loanTermMonths
